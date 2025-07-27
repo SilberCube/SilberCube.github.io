@@ -4,7 +4,7 @@ const CACHE_NAME = 'dashboard-cache-v1';
 // Liste der Dateien, die für den Offline-Modus zwischengespeichert werden sollen.
 const urlsToCache = [
   '/',
-  '/dashboard.html', // Fügen Sie den Namen Ihrer HTML-Datei hinzu, falls er anders ist
+  '/index.html', // Fügen Sie den Namen Ihrer HTML-Datei hinzu, falls er anders ist
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
   'https://cdn.jsdelivr.net/npm/lucide/dist/umd/lucide.min.js'
