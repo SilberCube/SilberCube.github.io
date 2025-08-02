@@ -80,8 +80,8 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
-        /* NEU: Custom Scrollbar Styling */
+
+        /* Custom Scrollbar Styling */
         #news-widget::-webkit-scrollbar,
         #todo-list::-webkit-scrollbar {
             width: 6px;
@@ -127,7 +127,7 @@
                         <i data-lucide="refresh-cw" class="h-4 w-4"></i>
                     </button>
                 </div>
-                <p id="briefing-content" class="text-gray-300 flex-grow flex items-center justify-center text-center">Briefing generieren...</p>
+                <p id="briefing-content" class="text-gray-300 flex-grow flex items-center justify-center text-center">Lade Daten für das Briefing...</p>
             </div>
 
             <!-- Wetter Widget -->
@@ -160,7 +160,6 @@
                 <h2 class="text-xl font-dots mb-4 flex items-center">HEUTIGE TO-DO-LISTE</h2>
                 <div class="flex mb-4">
                     <input type="text" id="todo-input" class="flex-grow bg-black/50 border border-gray-700/50 focus:border-red-500 rounded-l-lg p-2 outline-none" placeholder="Große Aufgabe eingeben...">
-                    <!-- NEU: KI Button -->
                     <button id="breakdown-task-btn" class="btn-ai text-white font-semibold p-3" title="Aufgabe mit KI aufteilen">
                         <i data-lucide="sparkles" class="h-6 w-6"></i>
                     </button>
@@ -203,6 +202,7 @@
 
     <script>
         // --- Globale Variablen & UI Elemente ---
+        let latestHeadlines = []; // Store news titles for AI briefing
         const todoInput = document.getElementById('todo-input');
         const addTodoBtn = document.getElementById('add-todo-btn');
         const todoList = document.getElementById('todo-list');
@@ -228,14 +228,19 @@
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             setupDate();
-            initWeather();
-            fetchNews();
             loadTodos(); 
             loadQuickLinks();
             registerServiceWorker();
             
             updateClock();
             setInterval(updateClock, 1000);
+            
+            Promise.all([initWeather(), fetchNews()]).then(() => {
+                generateBriefing();
+            }).catch(error => {
+                console.error("Initialization failed:", error);
+                briefingContent.textContent = "Konnte initiale Daten nicht laden.";
+            });
             
             addTodoBtn.addEventListener('click', addTodo);
             todoInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addTodo(); });
@@ -303,8 +308,8 @@
                 const weatherDesc = document.getElementById('weather-desc').textContent;
                 const weatherTemp = document.getElementById('weather-temp').textContent;
                 const todos = getTodos().map(t => t.text).join(', ') || 'keine Aufgaben';
+                const headlines = latestHeadlines.join('; ') || 'keine Nachrichten verfügbar';
                 
-                // UPDATE: Dynamische Begrüßung basierend auf der Uhrzeit
                 const currentHour = new Date().getHours();
                 let greeting = "Hallo!";
                 if (currentHour < 12) {
@@ -315,7 +320,7 @@
                     greeting = "Guten Abend!";
                 }
                 
-                const prompt = `Erstelle ein kurzes, freundliches und motivierendes deutsches Tages-Briefing im Stil eines persönlichen Assistenten. Das Wetter ist "${weatherDesc}" bei ${weatherTemp}. Die heutigen Aufgaben sind: "${todos}". Beginne mit "${greeting}" und halte es unter 50 Wörtern.`;
+                const prompt = `Erstelle ein kurzes, freundliches und motivierendes deutsches Tages-Briefing für mich, sprich mich dabei per "du" an. Beginne mit "${greeting}". Dein Wetter heute ist "${weatherDesc}" bei ${weatherTemp}. Deine heutigen Aufgaben sind: "${todos}". In den Nachrichten geht es um: "${headlines}". Fasse die wichtigsten politischen Ereignisse daraus in einem prägnanten Satz zusammen. Halte die gesamte Antwort kurz und persönlich (unter 80 Wörtern).`;
                 
                 const briefing = await callGeminiAPI(prompt);
                 briefingContent.textContent = briefing;
@@ -364,7 +369,7 @@
             }
         }
 
-        // --- Standard-Funktionen (unverändert) ---
+        // --- Standard-Funktionen ---
 
         function setupDate() {
             document.getElementById('current-date').textContent = new Date().toLocaleDateString('de-DE', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -378,7 +383,7 @@
 
         function initWeather() {
             const savedCity = localStorage.getItem('dashboard-city') || 'Kleinostheim';
-            fetchWeather(savedCity);
+            return fetchWeather(savedCity); // Return promise
         }
 
         function saveAndFetchWeather() {
@@ -440,8 +445,6 @@
                 weatherContent.classList.remove('hidden');
                 weatherContent.classList.add('flex');
                 
-                generateBriefing();
-
             } catch (error) {
                 console.error("Fehler beim Abrufen der Wetterdaten:", error);
                 weatherLoading.textContent = error.message;
@@ -461,6 +464,8 @@
                 if (data.status !== 'ok' || !data.items) throw new Error("Invalid news API response");
                 
                 newsWidget.innerHTML = '';
+                latestHeadlines = data.items.slice(0, 3).map(item => item.title); // Store headlines
+                
                 data.items.slice(0, 5).forEach(item => {
                     const newsElement = document.createElement('div');
                     newsElement.innerHTML = `
@@ -505,11 +510,15 @@
                 li.dataset.id = todo.id;
                 li.innerHTML = `
                     <button class="toggle-btn mr-3 p-1"><i data-lucide="${todo.completed ? 'check-circle-2' : 'circle'}" class="h-5 w-5 ${todo.completed ? 'text-green-500' : 'text-gray-500'}"></i></button>
-                    <span class="flex-grow">${todo.text}</span>
-                    <button class="delete-btn ml-3 p-1 text-gray-500 hover:text-red-500"><i data-lucide="trash-2" class="h-5 w-5"></i></button>
+                    <span class="flex-grow todo-text">${todo.text}</span>
+                    <div class="flex items-center">
+                        <button class="edit-btn p-1 text-gray-400 hover:text-blue-500"><i data-lucide="pencil" class="h-4 w-4"></i></button>
+                        <button class="delete-btn p-1 text-gray-500 hover:text-red-500"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
+                    </div>
                 `;
                 li.querySelector('.toggle-btn').addEventListener('click', () => toggleTodo(todo.id));
                 li.querySelector('.delete-btn').addEventListener('click', () => deleteTodo(todo.id));
+                li.querySelector('.edit-btn').addEventListener('click', () => editTodo(li, todo.id));
                 todoList.appendChild(li);
             });
             lucide.createIcons();
@@ -540,6 +549,39 @@
             todos = todos.filter(t => t.id !== id);
             saveTodos(todos);
             renderTodos(todos);
+        }
+
+        function editTodo(li, id) {
+            const todoTextSpan = li.querySelector('.todo-text');
+            const currentText = todoTextSpan.textContent;
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentText;
+            input.className = 'flex-grow bg-transparent border-b border-gray-500 focus:outline-none';
+
+            todoTextSpan.replaceWith(input);
+            input.focus();
+
+            const saveEdit = () => {
+                const newText = input.value.trim();
+                if (newText && newText !== currentText) {
+                    const todos = getTodos();
+                    const todoToUpdate = todos.find(t => t.id === id);
+                    if (todoToUpdate) {
+                        todoToUpdate.text = newText;
+                        saveTodos(todos);
+                    }
+                }
+                renderTodos(getTodos()); // Re-render to show the span again
+            };
+
+            input.addEventListener('blur', saveEdit);
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    input.blur(); // Trigger the blur event to save
+                }
+            });
         }
         
         function getQuickLinks() {
